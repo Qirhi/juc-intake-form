@@ -35,7 +35,7 @@ const useStyles = makeStyles((theme) => ({
 const initialIntakeValues = {
   name: "",
   email: "",
-  birthDate: "",
+  birthDate: null,
   emailConsent: false,
 };
 const initialIntakeErrors = {
@@ -44,7 +44,6 @@ const initialIntakeErrors = {
     birthDate: "",
     emailConsent: "",
 };
-const initialDisabled = true;
 
 
 const IntakeForm = (props) => {
@@ -53,23 +52,36 @@ const IntakeForm = (props) => {
 
     const [intakeInfo, setIntakeInfo] = useState(initialIntakeValues);
     const [intakeErrors, setIntakeErrors] = useState(initialIntakeErrors); 
-    const [disabled, setDisabled] = useState(initialDisabled) // boolean, for submit button 
+    const [isValid, setIsValid] = useState(false); // boolean, for submit button 
+    const [displayErrors,setDisplayErrors] = useState(false);
 
     const history = useHistory();
     const classes = useStyles();
     const dateFormat = require("dateformat");
 
     const handleChange = e => {
-        const userIntakeInfo = {...intakeInfo, [e.target.name]: e.target.value}
-        validate(e.target.name, e.target.value)
-        setIntakeInfo(userIntakeInfo);
+        if(e.target.name==='birthDate'&&e.target.value===''){
+            // edge case for birthDate, if birthDate is empty string, yup will fail.  If it is null, yup will allow it to pass validation
+            setIntakeInfo({...intakeInfo, [e.target.name]: null});
+        }
+        else{
+            setIntakeInfo({...intakeInfo, [e.target.name]: e.target.value})
+        }
     };
 
-    const validate = (name, value) => {
+    const validate = (formErrors, name, value) => {
         yup.reach(schema, name)
         .validate(value)
-        .then(() => setIntakeErrors({ ...intakeErrors, [name]: ''}))
-        .catch(err => setIntakeErrors({ ...intakeErrors, [name]: err.errors[0] }))
+        .then(() => {
+            formErrors[name] = '';
+            setIntakeErrors({...formErrors});
+        })
+        .catch(err => {
+            if(!(name==='birthDate'&&value==='')){
+                formErrors[name] =  err.errors[0];
+                setIntakeErrors({...formErrors});
+            }
+        } )
     }; // run validation with yup
 
     const dateFormatter = (stringDate) => {
@@ -92,12 +104,27 @@ const IntakeForm = (props) => {
         .catch(err => console.log(err));
     }
 
-  
     const handleSubmit = (e) => {
         e.preventDefault();
-        postIntakeInfo(intakeInfo);
-        enqueueSnackbar('Yes!  You have successfully signed up!');
+        const formErrors = {...intakeErrors};
+
+        Object.keys(intakeInfo).forEach(name=>validate(formErrors, name,intakeInfo[name]));
+
+        schema.isValid(intakeInfo).then(valid=>{
+            setIsValid(valid)
+        });
     };
+
+    useEffect(()=>{
+        if(isValid){
+            setDisplayErrors(false);
+            postIntakeInfo(intakeInfo);
+            enqueueSnackbar('Yes!  You have successfully signed up!');
+        }
+        else{
+            setDisplayErrors(true);
+        }
+    },[isValid])
 
     const handleClear = (e) => {
         e.preventDefault();
@@ -109,12 +136,7 @@ const IntakeForm = (props) => {
         gsap.to(".intake-container", {duration: 2, y: 30});
     }, []); // creates intake form animation, slide down
 
-    useEffect(() => {
-        schema.isValid(intakeInfo).then(valid => setDisabled(!valid))
-    }, [intakeInfo]); // adjust the status of 'disabled" every time formValues changes
-   
-    useEffect(() => {
-    }, [intakeErrors]);
+
 
     return (
         <div >
@@ -160,7 +182,7 @@ const IntakeForm = (props) => {
                         className={classes.button} 
                         size="large"
                         type="submit"
-                        disabled={disabled}
+                        disabled={false}
                     >
                         Submit
                     </Button>
@@ -174,13 +196,18 @@ const IntakeForm = (props) => {
                     >
                         Clear
                     </Button>
-
-                    <div className="intake-errors">
-                        <p>{intakeErrors.name}</p>
-                        <p>{intakeErrors.email}</p>
-                        <p>{intakeErrors.birthDate}</p>
-                        <p>{intakeErrors.emailConsent}</p>
-                    </div>
+                    {console.log(displayErrors,intakeErrors)}
+                    {
+                        displayErrors?
+                            <div className="intake-errors">
+                                <p>{intakeErrors.name}</p>
+                                <p>{intakeErrors.email}</p>
+                                <p>{intakeErrors.birthDate}</p>
+                                <p>{intakeErrors.emailConsent}</p>
+                            </div>
+                            :
+                            ''
+                    }
 
                 </form>
 
@@ -191,4 +218,3 @@ const IntakeForm = (props) => {
 };
 
 export default IntakeForm;
-
